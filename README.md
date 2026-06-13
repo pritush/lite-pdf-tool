@@ -8,7 +8,7 @@ Unlike traditional platforms like *iLovePDF*, *Adobe Acrobat Online*, or *Smallp
 [![DEMO](https://img.shields.io/badge/Hosting-Static%20%2F%20Serverless-success)](https://lite-pdf.vercel.app/)
 [![Privacy: 100% Client-Side](https://img.shields.io/badge/Privacy-100%25%20Local-brightgreen)](#-privacy-by-design)
 
-
+Demo: https://lite-pdf.vercel.app/
 ---
 
 ## ⚡ The Serverless Alternative to iLovePDF
