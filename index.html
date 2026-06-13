@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Client-side PDF tools for compression, protection, and page organization.">
+  <title>PDF Tool — Compress, Protect & Organize</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="icon" href="favicon.ico">
+  <link href="assets/css/styles.css?v=20260610-light2" rel="stylesheet">
+</head>
+
+<body>
+  <header class="top-nav">
+    <div class="container-fluid app-container h-100 d-flex align-items-center justify-content-between">
+      <a class="brand-mark" href="#compress" aria-label="pdf tool home">
+        <span class="brand-glyph">pdf</span>
+        <span>tool</span>
+      </a>
+      <div class="d-flex align-items-center h-100">
+        <nav class="tool-tabs" aria-label="PDF tools">
+          <a class="tool-tab" href="#compress" data-route="compress">
+            <i class="bi bi-file-earmark-zip" aria-hidden="true"></i>
+            <span>Compress</span>
+          </a>
+          <a class="tool-tab" href="#organize" data-route="organize">
+            <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>
+            <span>Organize</span>
+          </a>
+          <a class="tool-tab" href="#protect" data-route="protect">
+            <i class="bi bi-shield-lock" aria-hidden="true"></i>
+            <span>Protect</span>
+          </a>
+        </nav>
+        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">
+          <i class="bi bi-moon-fill" id="theme-icon" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero-band">
+      <div class="container-fluid app-container">
+        <div class="row g-0 align-items-stretch">
+          <div class="col-lg-5 hero-copy">
+            <p class="section-label">Light PDF utility</p>
+            <h1>pdf tool</h1>
+            <p class="hero-lead">Compress, protect, and organize PDFs directly in the browser with local processing.</p>
+          </div>
+          <div class="col-lg-7">
+            <div class="tool-switcher" aria-label="Select tool">
+              <a class="tool-tile" href="#compress" data-route="compress">
+                <i class="bi bi-file-earmark-zip" aria-hidden="true"></i>
+                <span>Compress PDF</span>
+                <small>Low to extreme levels</small>
+              </a>
+              <a class="tool-tile" href="#organize" data-route="organize">
+                <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>
+                <span>Organize PDF</span>
+                <small>Sort, delete, and add pages</small>
+              </a>
+              <a class="tool-tile" href="#protect" data-route="protect">
+                <i class="bi bi-shield-lock" aria-hidden="true"></i>
+                <span>Protect PDF</span>
+                <small>256-bit password encryption</small>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="workspace-band">
+      <div class="container-fluid app-container">
+        <section class="tool-panel" id="compress-panel" data-panel="compress" aria-labelledby="compress-title">
+          <div class="panel-heading">
+            <div>
+              <p class="section-label">Compress PDF</p>
+              <h2 id="compress-title">Reduce PDF file size</h2>
+            </div>
+            <span class="privacy-chip"><i class="bi bi-cpu" aria-hidden="true"></i> Browser engine</span>
+          </div>
+
+          <div class="row g-0 tool-layout">
+            <div class="col-xl-5 tool-controls">
+              <label class="drop-zone" for="compress-file" id="compress-drop">
+                <input class="visually-hidden" id="compress-file" type="file" accept="application/pdf,.pdf">
+                <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>
+                <span class="drop-copy">
+                  <span>Select PDF</span>
+                  <small id="compress-file-meta">PDF only</small>
+                </span>
+              </label>
+
+              <fieldset class="control-group">
+                <legend>Compression level</legend>
+                <div class="level-grid" role="radiogroup" aria-label="Compression level">
+                  <label class="level-option">
+                    <input type="radio" name="compression-level" value="low">
+                    <span>Low</span>
+                    <small>Quality first</small>
+                  </label>
+                  <label class="level-option">
+                    <input type="radio" name="compression-level" value="medium" checked>
+                    <span>Medium</span>
+                    <small>Balanced</small>
+                  </label>
+                  <label class="level-option">
+                    <input type="radio" name="compression-level" value="high">
+                    <span>High</span>
+                    <small>Smaller files</small>
+                  </label>
+                  <label class="level-option">
+                    <input type="radio" name="compression-level" value="extreme">
+                    <span>Extreme</span>
+                    <small>Smallest output</small>
+                  </label>
+                </div>
+              </fieldset>
+
+              <button class="btn btn-primary action-button" id="compress-button" type="button" disabled>
+                <i class="bi bi-file-earmark-arrow-down" aria-hidden="true"></i>
+                Compress PDF
+              </button>
+            </div>
+
+            <div class="col-xl-7 tool-output">
+              <div class="status-strip" id="compress-status">
+                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                <span>Choose a PDF to begin.</span>
+              </div>
+              <div class="progress carbon-progress" role="progressbar" aria-label="Compression progress"
+                aria-valuemin="0" aria-valuemax="100">
+                <div class="progress-bar" id="compress-progress" style="width: 0%"></div>
+              </div>
+              <div class="metric-grid" id="compress-metrics" aria-live="polite">
+                <div>
+                  <small>Original</small>
+                  <strong>-</strong>
+                </div>
+                <div>
+                  <small>Estimated output</small>
+                  <strong>-</strong>
+                </div>
+                <div>
+                  <small>Actual output</small>
+                  <strong>-</strong>
+                </div>
+                <div>
+                  <small>Actual saved</small>
+                  <strong>-</strong>
+                </div>
+              </div>
+              <button class="btn btn-primary action-button" id="compress-download" type="button" disabled>
+                <i class="bi bi-download" aria-hidden="true"></i>
+                Download compressed PDF
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section class="tool-panel" id="organize-panel" data-panel="organize" aria-labelledby="organize-title" hidden>
+          <div class="panel-heading">
+            <div>
+              <p class="section-label">Organize PDF</p>
+              <h2 id="organize-title">Sort, delete, and add pages</h2>
+            </div>
+            <span class="privacy-chip"><i class="bi bi-layers" aria-hidden="true"></i> Visual page editor</span>
+          </div>
+
+          <div class="row g-0 tool-layout organize-layout">
+            <div class="col-xl-4 tool-controls">
+              <label class="drop-zone" for="organize-file" id="organize-drop">
+                <input class="visually-hidden" id="organize-file" type="file" accept="application/pdf,.pdf">
+                <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>
+                <span class="drop-copy">
+                  <span>Select base PDF</span>
+                  <small id="organize-file-meta">PDF only</small>
+                </span>
+              </label>
+
+              <label class="file-action" for="organize-add-file">
+                <input class="visually-hidden" id="organize-add-file" type="file" accept="application/pdf,.pdf"
+                  multiple>
+                <i class="bi bi-plus-square" aria-hidden="true"></i>
+                <span>Add PDF pages</span>
+              </label>
+
+              <div class="toolbar-row" aria-label="Organizer actions">
+                <button class="icon-command" id="organize-reset" type="button" disabled title="Reset pages">
+                  <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+                  <span>Reset</span>
+                </button>
+                <button class="icon-command" id="organize-clear" type="button" disabled title="Clear pages">
+                  <i class="bi bi-x-square" aria-hidden="true"></i>
+                  <span>Clear</span>
+                </button>
+              </div>
+
+              <button class="btn btn-primary action-button" id="organize-button" type="button" disabled>
+                <i class="bi bi-save" aria-hidden="true"></i>
+                Save organized PDF
+              </button>
+            </div>
+
+            <div class="col-xl-8 tool-output">
+              <div class="status-strip" id="organize-status">
+                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                <span>Select a PDF to show pages.</span>
+              </div>
+              <div class="page-grid-empty" id="page-empty">
+                <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>
+                <span>No pages loaded</span>
+              </div>
+              <div class="page-grid" id="page-grid" aria-live="polite"></div>
+              <button class="btn btn-primary action-button" id="organize-download" type="button" disabled>
+                <i class="bi bi-download" aria-hidden="true"></i>
+                Download organized PDF
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section class="tool-panel" id="protect-panel" data-panel="protect" aria-labelledby="protect-title" hidden>
+          <div class="panel-heading">
+            <div>
+              <p class="section-label">Password Protect PDF</p>
+              <h2 id="protect-title">Add password encryption</h2>
+            </div>
+            <span class="privacy-chip"><i class="bi bi-lock" aria-hidden="true"></i> QPDF WASM</span>
+          </div>
+
+          <div class="row g-0 tool-layout">
+            <div class="col-xl-5 tool-controls">
+              <label class="drop-zone" for="protect-file" id="protect-drop">
+                <input class="visually-hidden" id="protect-file" type="file" accept="application/pdf,.pdf">
+                <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i>
+                <span class="drop-copy">
+                  <span>Select PDF</span>
+                  <small id="protect-file-meta">PDF only</small>
+                </span>
+              </label>
+
+              <div class="control-group">
+                <label class="form-label" for="protect-password">Open password</label>
+                <div class="input-shell">
+                  <input class="form-control" id="protect-password" type="password" autocomplete="new-password"
+                    minlength="1">
+                  <button class="icon-only" type="button" data-toggle-password="protect-password" title="Show password">
+                    <i class="bi bi-eye" aria-hidden="true"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div class="control-group">
+                <label class="form-label" for="protect-confirm">Confirm password</label>
+                <input class="form-control" id="protect-confirm" type="password" autocomplete="new-password"
+                  minlength="1">
+              </div>
+
+              <button class="btn btn-primary action-button" id="protect-button" type="button" disabled>
+                <i class="bi bi-shield-lock" aria-hidden="true"></i>
+                Protect PDF
+              </button>
+            </div>
+
+            <div class="col-xl-7 tool-output">
+              <div class="status-strip" id="protect-status">
+                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                <span>Choose a PDF and password to begin.</span>
+              </div>
+              <div class="metric-grid protect-metrics">
+                <div>
+                  <small>Encryption</small>
+                  <strong>256-bit AES</strong>
+                </div>
+                <div>
+                  <small>Processing</small>
+                  <strong>Client-side</strong>
+                </div>
+                <div>
+                  <small>Uploads</small>
+                  <strong>None</strong>
+                </div>
+              </div>
+              <button class="btn btn-primary action-button" id="protect-download" type="button" disabled>
+                <i class="bi bi-download" aria-hidden="true"></i>
+                Download protected PDF
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <div
+      class="container-fluid app-container d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+      <span>pdf tool</span>
+      <span>Files stay on your device during processing.</span>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+  <script type="module" src="assets/js/app.js?v=4"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("service-worker.js").then((reg) => {
+          reg.update();
+        }).catch(() => {});
+      });
+
+      // Force reload when the new service worker takes over to ensure it's active
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
+    }
+  </script>
+</body>
+
+</html>
