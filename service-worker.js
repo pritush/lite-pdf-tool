@@ -1,9 +1,11 @@
-const CACHE_NAME = "pdf-tool-cache-v4";
+const CACHE_NAME = "pdf-tool-cache-v5";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
   "./assets/css/styles.css",
-  "./assets/js/app.js"
+  "./assets/js/app.js",
+  "./assets/js/compress-worker.js",
+  "./assets/js/image-processor.js"
 ];
 
 self.addEventListener("install", (event) => {

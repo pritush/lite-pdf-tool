@@ -1,4 +1,4 @@
-import createGhostscript from "https://cdn.jsdelivr.net/npm/ghostscript-wasm-esm@1.0.1/gs.mjs";
+/* Ghostscript compression runs in assets/js/compress-worker.js (Web Worker) */
 import createQPDF from "https://cdn.jsdelivr.net/npm/qpdf-wasm-esm-embedded@1.1.1/qpdf.mjs";
 import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@5.7.284/build/pdf.mjs";
 import { PDFDocument } from "https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm";
@@ -107,7 +107,7 @@ const state = {
 };
 
 let qpdfPromise = null;
-let ghostscriptPromise = null;
+let compressWorker = null;
 
 function activateRoute(routeName) {
   const route = routes.includes(routeName) ? routeName : "compress";
@@ -168,10 +168,18 @@ function setStatus(element, message, type = "info") {
   if (text) text.textContent = message;
 }
 
-function setProgress(percent) {
-  const next = Math.max(0, Math.min(100, Math.round(percent)));
-  elements.compressProgress.style.width = `${next}%`;
-  elements.compressProgress.parentElement.setAttribute("aria-valuenow", String(next));
+function setProgress(percent, indeterminate = false) {
+  const bar = elements.compressProgress;
+  if (indeterminate) {
+    bar.classList.add("indeterminate");
+    bar.style.width = "100%";
+    bar.parentElement.setAttribute("aria-valuenow", "0");
+  } else {
+    bar.classList.remove("indeterminate");
+    const next = Math.max(0, Math.min(100, Math.round(percent)));
+    bar.style.width = `${next}%`;
+    bar.parentElement.setAttribute("aria-valuenow", String(next));
+  }
 }
 
 function setMetrics(original = "-", estimated = "-", compressed = "-", saved = "-") {
@@ -290,21 +298,59 @@ async function compressCurrentPdf() {
   elements.compressButton.disabled = true;
   elements.compressDownload.disabled = true;
   updateCompressionEstimate();
-  setProgress(3);
-  setStatus(elements.compressStatus, `Loading ${mode.label.toLowerCase()} compression engine...`);
+  setProgress(2, true);
+  setStatus(elements.compressStatus, "Loading compression engine...");
 
   try {
     const originalBytes = await file.arrayBuffer();
     const originalPageCount = await getPdfPageCount(originalBytes);
 
-    setProgress(18);
-    setStatus(elements.compressStatus, "Optimizing PDF structure and image streams...");
+    /* Terminate any in-flight worker from a previous run */
+    if (compressWorker) {
+      compressWorker.terminate();
+      compressWorker = null;
+    }
 
-    const outputBytes = await compressWithGhostscript(originalBytes, mode);
+    const worker = new Worker("assets/js/compress-worker.js", { type: "module" });
+    compressWorker = worker;
+
+    const outputBytes = await new Promise((resolve, reject) => {
+      worker.onmessage = (e) => {
+        const msg = e.data;
+        switch (msg.type) {
+          case "progress":
+            setProgress(msg.percent);
+            break;
+          case "status":
+            setStatus(elements.compressStatus, msg.message);
+            break;
+          case "complete":
+            resolve(msg.outputBytes);
+            break;
+          case "error":
+            reject(new Error(msg.message));
+            break;
+        }
+      };
+
+      worker.onerror = (err) => {
+        reject(new Error(err.message || "Compression worker error."));
+      };
+
+      /* Transfer the buffer (zero-copy to worker) */
+      const buffer = originalBytes.slice(0);
+      worker.postMessage(
+        { inputBytes: buffer, mode, totalPages: originalPageCount },
+        [buffer],
+      );
+    });
+
+    /* Verify page count of the compressed output */
     const outputPageCount = await getPdfPageCount(outputBytes);
-
     if (originalPageCount !== outputPageCount) {
-      throw new Error(`Output page count changed from ${originalPageCount} to ${outputPageCount}. Compression was cancelled.`);
+      throw new Error(
+        `Output page count changed from ${originalPageCount} to ${outputPageCount}. Compression was cancelled.`,
+      );
     }
 
     const outputBlob = new Blob([outputBytes], { type: "application/pdf" });
@@ -317,7 +363,16 @@ async function compressCurrentPdf() {
 
     setProgress(100);
     setMetrics(formatBytes(file.size), estimateCompressedSize(file, mode), formatBytes(outputBlob.size), `${savedPercent}%`);
-    setStatus(elements.compressStatus, `${mode.label} compression complete. Page count verified.`, "success");
+
+    if (outputBlob.size >= file.size) {
+      setStatus(
+        elements.compressStatus,
+        `This PDF is already well-optimized — ${mode.label} compression couldn't reduce it further.`,
+        "info",
+      );
+    } else {
+      setStatus(elements.compressStatus, `${mode.label} compression complete — ${savedPercent}% saved.`, "success");
+    }
     elements.compressDownload.disabled = false;
   } catch (error) {
     setProgress(0);
@@ -327,54 +382,8 @@ async function compressCurrentPdf() {
   }
 }
 
-async function getGhostscript() {
-  if (!ghostscriptPromise) {
-    ghostscriptPromise = createGhostscript({
-      print: () => {},
-      printErr: () => {},
-    });
-  }
-  return ghostscriptPromise;
-}
-
-async function compressWithGhostscript(inputBytes, mode) {
-  const gs = await getGhostscript();
-  const stamp = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const inputName = `/compress-input-${stamp}.pdf`;
-  const outputName = `/compress-output-${stamp}.pdf`;
-
-  try {
-    gs.FS.writeFile(inputName, new Uint8Array(inputBytes));
-    setProgress(40);
-
-    gs.callMain([
-      "-sDEVICE=pdfwrite",
-      "-dCompatibilityLevel=1.4",
-      `-dPDFSETTINGS=${mode.preset}`,
-      "-dNOPAUSE",
-      "-dBATCH",
-      "-dQUIET",
-      "-dSAFER",
-      "-dAutoRotatePages=/None",
-      "-dCompressFonts=true",
-      "-dSubsetFonts=true",
-      ...mode.extra,
-      `-sOutputFile=${outputName}`,
-      inputName,
-    ]);
-
-    setProgress(78);
-    return gs.FS.readFile(outputName);
-  } finally {
-    [inputName, outputName].forEach((path) => {
-      try {
-        gs.FS.unlink(path);
-      } catch {
-        /* Virtual files may not exist after a failed Ghostscript run. */
-      }
-    });
-  }
-}
+/* getGhostscript() and compressWithGhostscript() removed —
+   compression now runs inside compress-worker.js (Web Worker). */
 
 async function getPdfPageCount(bytes) {
   const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(bytes.slice(0)) });
@@ -567,6 +576,8 @@ async function appendPdfSource(file, isBase) {
   const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(bytes.slice(0)) });
   const pdf = await loadingTask.promise;
 
+  /* ① Create all page tiles immediately (instant visual feedback) */
+  const tiles = [];
   for (let pageIndex = 0; pageIndex < pdf.numPages; pageIndex += 1) {
     const pageId = `page-${++state.organize.pageCounter}`;
     const descriptor = {
@@ -578,8 +589,26 @@ async function appendPdfSource(file, isBase) {
     };
     state.organize.pages.set(pageId, descriptor);
     const item = createPageTile(descriptor);
+    item.querySelector(".page-thumb").classList.add("is-loading");
     elements.pageGrid.append(item);
-    await renderThumbnail(pdf, pageIndex + 1, item.querySelector("canvas"));
+    tiles.push({ item, pageNumber: pageIndex + 1 });
+  }
+
+  /* ② Render thumbnails in parallel chunks — yields to the event loop
+     between batches so the UI stays responsive for large PDFs. */
+  const CHUNK = 4;
+  for (let i = 0; i < tiles.length; i += CHUNK) {
+    const chunk = tiles.slice(i, i + CHUNK);
+    await Promise.all(
+      chunk.map(async ({ item, pageNumber }) => {
+        const canvas = item.querySelector("canvas");
+        await renderThumbnail(pdf, pageNumber, canvas);
+        item.querySelector(".page-thumb").classList.remove("is-loading");
+      }),
+    );
+    if (i + CHUNK < tiles.length) {
+      await new Promise((r) => requestAnimationFrame(r));
+    }
   }
 
   await pdf.destroy();
