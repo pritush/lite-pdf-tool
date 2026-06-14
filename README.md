@@ -5,9 +5,10 @@ An ultra-lightweight, **100% client-side** web application designed to compress,
 Unlike traditional platforms like *iLovePDF*, *Adobe Acrobat Online*, or *Smallpdf*, this utility performs **all processing locally** on your device using WebAssembly (WASM) and JavaScript. Your documents never touch a remote server, offering total privacy and zero hosting overhead.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Hosted: Static](https://img.shields.io/badge/Hosting-Static%20%2F%20Serverless-success)](https://pages.github.com/)
+[![DEMO](https://img.shields.io/badge/Hosting-Static%20%2F%20Serverless-success)](https://lite-pdf.vercel.app/)
 [![Privacy: 100% Client-Side](https://img.shields.io/badge/Privacy-100%25%20Local-brightgreen)](#-privacy-by-design)
 
+Demo: https://lite-pdf.vercel.app/
 ---
 
 ## ⚡ The Serverless Alternative to iLovePDF
