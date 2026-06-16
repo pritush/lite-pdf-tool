@@ -1,4 +1,4 @@
-const CACHE_NAME = "pdf-tool-cache-v5";
+const CACHE_NAME = "pdf-tool-cache-v6";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -32,6 +32,29 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+/**
+ * Inject Cross-Origin Isolation headers into same-origin responses.
+ * This enables SharedArrayBuffer which Ghostscript WASM requires.
+ * Only patches responses that don't already have the headers set
+ * (i.e. when the hosting platform doesn't handle it via vercel.json / netlify.toml).
+ */
+function withCrossOriginHeaders(response) {
+  // Only patch same-origin (basic) responses — can't modify opaque/cors responses
+  if (response.type !== "basic") return response;
+  // Skip if headers are already set by the server
+  if (response.headers.get("Cross-Origin-Opener-Policy")) return response;
+
+  const headers = new Headers(response.headers);
+  headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  headers.set("Cross-Origin-Embedder-Policy", "credentialless");
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
@@ -52,7 +75,7 @@ self.addEventListener("fetch", (event) => {
             });
           }
         }).catch(() => {});
-        return cachedResponse;
+        return withCrossOriginHeaders(cachedResponse);
       }
 
       return fetch(event.request).then((networkResponse) => {
@@ -64,7 +87,7 @@ self.addEventListener("fetch", (event) => {
             cache.put(event.request, responseToCache);
           });
         }
-        return networkResponse;
+        return withCrossOriginHeaders(networkResponse);
       }).catch(() => {
         // Return offline fallback if necessary
       });

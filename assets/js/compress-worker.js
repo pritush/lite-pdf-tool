@@ -65,7 +65,28 @@ function post(type, data = {}) {
 
 async function ensureGhostscript() {
   if (!gsInstance) {
-    gsInstance = await createGhostscript({ print() {}, printErr() {} });
+    /* SharedArrayBuffer is required by Ghostscript WASM for multi-threading.
+       It's only available in cross-origin isolated contexts (COOP + COEP headers). */
+    if (typeof SharedArrayBuffer === "undefined") {
+      throw new Error(
+        "SharedArrayBuffer is not available. " +
+        "This usually means the page is missing Cross-Origin-Opener-Policy and " +
+        "Cross-Origin-Embedder-Policy headers. Compression cannot run without them."
+      );
+    }
+
+    /* Guard against silent hangs — abort if init takes > 30 seconds */
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(
+        "Ghostscript WASM failed to initialize within 30 seconds. " +
+        "Please reload the page and try again."
+      )), 30_000)
+    );
+
+    gsInstance = await Promise.race([
+      createGhostscript({ print() {}, printErr() {} }),
+      timeout,
+    ]);
   }
   return gsInstance;
 }

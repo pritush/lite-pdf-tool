@@ -315,6 +315,17 @@
       window.addEventListener("load", () => {
         navigator.serviceWorker.register("service-worker.js").then((reg) => {
           reg.update();
+
+          // First visit: if no controller is active yet, wait for the SW to activate
+          // then reload so the COOP/COEP headers take effect for SharedArrayBuffer.
+          if (!navigator.serviceWorker.controller && reg.installing) {
+            const sw = reg.installing;
+            sw.addEventListener("statechange", () => {
+              if (sw.state === "activated" && !window.crossOriginIsolated) {
+                window.location.reload();
+              }
+            });
+          }
         }).catch(() => {});
       });
 
