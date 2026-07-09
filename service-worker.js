@@ -1,4 +1,4 @@
-const CACHE_NAME = "pdf-tool-cache-v6";
+const CACHE_NAME = "pdf-tool-cache-v7";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -35,12 +35,12 @@ self.addEventListener("activate", (event) => {
 /**
  * Inject Cross-Origin Isolation headers into same-origin responses.
  * This enables SharedArrayBuffer which Ghostscript WASM requires.
- * Only patches responses that don't already have the headers set
- * (i.e. when the hosting platform doesn't handle it via vercel.json / netlify.toml).
+ * This is critical for environments where server headers can't be configured.
  */
 function withCrossOriginHeaders(response) {
   // Only patch same-origin (basic) responses — can't modify opaque/cors responses
-  if (response.type !== "basic") return response;
+  if (!response || response.type !== "basic") return response;
+  
   // Skip if headers are already set by the server
   if (response.headers.get("Cross-Origin-Opener-Policy")) return response;
 
@@ -64,10 +64,12 @@ self.addEventListener("fetch", (event) => {
   // Never intercept chrome-extension or non-http(s) schemes
   if (!event.request.url.startsWith("http")) return;
 
+  // CRITICAL: Always inject headers for same-origin requests to enable SharedArrayBuffer
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
+      // If we have a cached response, use it with headers injected
       if (cachedResponse) {
-        // Fetch to update cache for next time, but return immediately
+        // Fetch to update cache for next time, but don't wait
         fetch(event.request).then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             caches.open(CACHE_NAME).then((cache) => {
@@ -75,22 +77,36 @@ self.addEventListener("fetch", (event) => {
             });
           }
         }).catch(() => {});
+        
         return withCrossOriginHeaders(cachedResponse);
       }
 
-      return fetch(event.request).then((networkResponse) => {
-        // Cache new successful GET requests (fonts, scripts, css) for long period
-        if (networkResponse && networkResponse.status === 200 &&
-            (networkResponse.type === "basic" || networkResponse.type === "cors")) {
+      // No cache hit - fetch from network and inject headers
+      return fetch(event.request)
+        .then((networkResponse) => {
+          // Clone response before consuming it
           const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
+          
+          // Cache successful responses
+          if (networkResponse && networkResponse.status === 200 &&
+              (networkResponse.type === "basic" || networkResponse.type === "cors")) {
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          
+          // Always inject headers before returning
+          return withCrossOriginHeaders(networkResponse);
+        })
+        .catch((error) => {
+          // Network failed - try to serve from cache anyway
+          return caches.match(event.request).then((response) => {
+            if (response) {
+              return withCrossOriginHeaders(response);
+            }
+            throw error;
           });
-        }
-        return withCrossOriginHeaders(networkResponse);
-      }).catch(() => {
-        // Return offline fallback if necessary
-      });
+        });
     })
   );
 });

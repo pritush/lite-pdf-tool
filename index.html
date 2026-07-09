@@ -314,29 +314,50 @@
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
         navigator.serviceWorker.register("service-worker.js").then((reg) => {
+          // Force update check
           reg.update();
 
           // First visit: if no controller is active yet, wait for the SW to activate
           // then reload so the COOP/COEP headers take effect for SharedArrayBuffer.
-          if (!navigator.serviceWorker.controller && reg.installing) {
-            const sw = reg.installing;
-            sw.addEventListener("statechange", () => {
-              if (sw.state === "activated" && !window.crossOriginIsolated) {
-                window.location.reload();
-              }
-            });
+          if (!navigator.serviceWorker.controller) {
+            if (reg.installing) {
+              const sw = reg.installing;
+              sw.addEventListener("statechange", () => {
+                if (sw.state === "activated" && !window.crossOriginIsolated) {
+                  console.log("Service worker activated. Reloading to apply cross-origin isolation headers...");
+                  window.location.reload();
+                }
+              });
+            } else if (reg.active && !window.crossOriginIsolated) {
+              // Service worker is already active but we're not isolated yet
+              console.log("Service worker already active. Reloading to apply cross-origin isolation headers...");
+              window.location.reload();
+            }
           }
-        }).catch(() => {});
+        }).catch((err) => {
+          console.warn("Service worker registration failed:", err);
+        });
       });
 
-      // Force reload when the new service worker takes over to ensure it's active
+      // Force reload when a new service worker takes over
       let refreshing = false;
       navigator.serviceWorker.addEventListener("controllerchange", () => {
         if (!refreshing) {
           refreshing = true;
+          console.log("New service worker taking control. Reloading...");
           window.location.reload();
         }
       });
+      
+      // Log cross-origin isolation status for debugging
+      if (window.crossOriginIsolated) {
+        console.log("✅ Cross-origin isolated: SharedArrayBuffer is available");
+      } else {
+        console.warn("⚠️ Not cross-origin isolated yet. SharedArrayBuffer may not be available.");
+        console.log("If service worker is installed, the page will reload automatically to apply headers.");
+      }
+    } else {
+      console.error("❌ Service Workers are not supported in this browser. Compression features will not work.");
     }
   </script>
 </body>
