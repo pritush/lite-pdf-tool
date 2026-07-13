@@ -4,49 +4,34 @@ import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@5.7.284/build
 import { PDFDocument } from "https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm";
 import Sortable from "https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/+esm";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@5.7.284/build/pdf.worker.mjs";
+// Import modular utilities
+import { CONFIG } from "./modules/config.js";
+import { 
+  isPdf, 
+  formatBytes, 
+  filenameWithSuffix, 
+  downloadBlob, 
+  getRouteFromHash,
+  scrollToWorkspace,
+  bindDropZone,
+  readableError,
+  detectFeatures,
+  checkRequiredFeatures
+} from "./modules/core.js";
+import { 
+  setStatus, 
+  setProgress, 
+  setMetrics, 
+  activateRoute,
+  showCompatibilityWarning,
+  showCrossOriginWarning,
+  initTheme 
+} from "./modules/ui.js";
 
-const routes = ["compress", "organize", "protect"];
-const compressionModeMap = {
-  low: {
-    preset: "/printer",
-    label: "Low",
-    estimateRange: [0.7, 0.95],
-    extra: [],
-  },
-  medium: {
-    preset: "/ebook",
-    label: "Medium",
-    estimateRange: [0.45, 0.75],
-    extra: ["-dDetectDuplicateImages=true"],
-  },
-  high: {
-    preset: "/screen",
-    label: "High",
-    estimateRange: [0.25, 0.55],
-    extra: [
-      "-dDetectDuplicateImages=true",
-      "-dDownsampleColorImages=true",
-      "-dColorImageResolution=120",
-      "-dDownsampleGrayImages=true",
-      "-dGrayImageResolution=120",
-    ],
-  },
-  extreme: {
-    preset: "/screen",
-    label: "Extreme",
-    estimateRange: [0.15, 0.4],
-    extra: [
-      "-dDetectDuplicateImages=true",
-      "-dDownsampleColorImages=true",
-      "-dColorImageResolution=72",
-      "-dDownsampleGrayImages=true",
-      "-dGrayImageResolution=72",
-      "-dDownsampleMonoImages=true",
-      "-dMonoImageResolution=150",
-    ],
-  },
-};
+pdfjsLib.GlobalWorkerOptions.workerSrc = CONFIG.CDN.PDFJS_WORKER;
+
+const routes = CONFIG.ROUTES;
+const compressionModeMap = CONFIG.COMPRESSION_MODES;
 
 const elements = {
   tabs: document.querySelectorAll("[data-route]"),
@@ -109,16 +94,25 @@ const state = {
 let qpdfPromise = null;
 let compressWorker = null;
 
-function activateRoute(routeName) {
-  const route = routes.includes(routeName) ? routeName : "compress";
+// Check browser compatibility on load
+const features = detectFeatures();
+const compatibility = checkRequiredFeatures(features);
 
-  elements.tabs.forEach((tab) => {
-    tab.classList.toggle("is-active", tab.dataset.route === route);
-  });
+if (!compatibility.supported) {
+  console.error("[App] Missing required features:", compatibility.missing);
+  showCompatibilityWarning(compatibility.missing);
+}
 
-  elements.panels.forEach((panel) => {
-    panel.hidden = panel.dataset.panel !== route;
-  });
+// Warn if not cross-origin isolated (affects compression)
+if (!features.crossOriginIsolated && features.serviceWorker) {
+  console.warn("[App] Not cross-origin isolated. Compression may not work until page reload.");
+  showCrossOriginWarning();
+}
+
+console.log("[App] Feature detection:", features);
+
+function activateRouteHandler(routeName) {
+  activateRoute(routeName, routes);
 }
 
 function scrollToWorkspace() {
@@ -128,67 +122,27 @@ function scrollToWorkspace() {
   });
 }
 
-function getRouteFromHash() {
-  return window.location.hash.replace("#", "") || "compress";
+function getRouteFromHashHandler() {
+  return getRouteFromHash();
 }
 
-function isPdf(file) {
-  return Boolean(file && (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")));
-}
+function isPdfHandler(file) {
+  return isPdf(file);
 
-function formatBytes(bytes) {
-  if (!bytes) return "0 B";
-  const units = ["B", "KB", "MB", "GB"];
-  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  return `${Number((bytes / 1024 ** exponent).toFixed(exponent ? 1 : 0))} ${units[exponent]}`;
-}
+function formatBytesHandler(bytes) {
+  return formatBytes(bytes);
 
-function filenameWithSuffix(filename, suffix) {
-  const dot = filename.lastIndexOf(".");
-  const base = dot > 0 ? filename.slice(0, dot) : filename;
-  return `${base}${suffix}.pdf`;
-}
+function filenameWithSuffixHandler(filename, suffix) {
+  return filenameWithSuffix(filename, suffix);
 
-function setStatus(element, message, type = "info") {
-  const icon = element.querySelector("i");
-  const text = element.querySelector("span");
+function setStatusHandler(element, message, type = "info") {
+  setStatus(element, message, type);
 
-  element.classList.remove("is-success", "is-error");
-  if (type === "success") element.classList.add("is-success");
-  if (type === "error") element.classList.add("is-error");
+function setProgressHandler(percent, indeterminate = false) {
+  setProgress(elements.compressProgress, percent, indeterminate);
 
-  if (icon) {
-    icon.className = {
-      info: "bi bi-info-circle",
-      success: "bi bi-check-circle",
-      error: "bi bi-exclamation-triangle",
-    }[type] || "bi bi-info-circle";
-  }
-
-  if (text) text.textContent = message;
-}
-
-function setProgress(percent, indeterminate = false) {
-  const bar = elements.compressProgress;
-  if (indeterminate) {
-    bar.classList.add("indeterminate");
-    bar.style.width = "100%";
-    bar.parentElement.setAttribute("aria-valuenow", "0");
-  } else {
-    bar.classList.remove("indeterminate");
-    const next = Math.max(0, Math.min(100, Math.round(percent)));
-    bar.style.width = `${next}%`;
-    bar.parentElement.setAttribute("aria-valuenow", String(next));
-  }
-}
-
-function setMetrics(original = "-", estimated = "-", compressed = "-", saved = "-") {
-  const metrics = elements.compressMetrics.querySelectorAll("strong");
-  metrics[0].textContent = original;
-  metrics[1].textContent = estimated;
-  metrics[2].textContent = compressed;
-  metrics[3].textContent = saved;
-}
+function setMetricsHandler(original = "-", estimated = "-", compressed = "-", saved = "-") {
+  setMetrics(elements.compressMetrics, original, estimated, compressed, saved);
 
 function getSelectedCompressionMode() {
   const selectedLevel = document.querySelector('input[name="compression-level"]:checked')?.value || "medium";
@@ -208,52 +162,22 @@ function estimateCompressedSize(file, mode = getSelectedCompressionMode()) {
 
 function updateCompressionEstimate() {
   const file = state.compress.file;
-  if (!file) {
-    setMetrics();
-    return;
-  }
+  if (!file) return;
 
   const actual = state.compress.result?.blob ? formatBytes(state.compress.result.blob.size) : "-";
   const saved = state.compress.result?.blob
     ? `${Math.max(0, Math.round((1 - state.compress.result.blob.size / file.size) * 100))}%`
     : "-";
 
-  setMetrics(formatBytes(file.size), estimateCompressedSize(file), actual, saved);
+  setMetricsHandler(formatBytes(file.size), estimateCompressedSize(file), actual, saved);
 }
 
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+function downloadBlobHandler(blob, filename) {
+  downloadBlob(blob, filename);
 }
 
-function bindDropZone(dropZone, input, onFiles) {
-  ["dragenter", "dragover"].forEach((eventName) => {
-    dropZone.addEventListener(eventName, (event) => {
-      event.preventDefault();
-      dropZone.classList.add("is-dragging");
-    });
-  });
-
-  ["dragleave", "drop"].forEach((eventName) => {
-    dropZone.addEventListener(eventName, (event) => {
-      event.preventDefault();
-      dropZone.classList.remove("is-dragging");
-    });
-  });
-
-  dropZone.addEventListener("drop", (event) => {
-    onFiles(Array.from(event.dataTransfer.files || []));
-  });
-
-  input.addEventListener("change", () => {
-    onFiles(Array.from(input.files || []));
-  });
+function bindDropZoneHandler(dropZone, input, onFiles) {
+  bindDropZone(dropZone, input, onFiles);
 }
 
 function updateCompressReady() {
@@ -264,19 +188,19 @@ function setCompressFile(file) {
   state.compress.file = null;
   state.compress.result = null;
   elements.compressDownload.disabled = true;
-  setProgress(0);
-  setMetrics();
+  setProgressHandler(0);
+  setMetricsHandler();
 
   if (!file) {
     elements.compressMeta.textContent = "PDF only";
-    setStatus(elements.compressStatus, "Choose a PDF to begin.");
+    setStatusHandler(elements.compressStatus, "Choose a PDF to begin.");
     updateCompressReady();
     return;
   }
 
   if (!isPdf(file)) {
     elements.compressMeta.textContent = "PDF only";
-    setStatus(elements.compressStatus, "That file is not a PDF.", "error");
+    setStatusHandler(elements.compressStatus, "That file is not a PDF.", "error");
     updateCompressReady();
     return;
   }
@@ -284,7 +208,7 @@ function setCompressFile(file) {
   state.compress.file = file;
   elements.compressMeta.textContent = `${file.name} · ${formatBytes(file.size)}`;
   updateCompressionEstimate();
-  setStatus(elements.compressStatus, `${file.name} is ready.`);
+  setStatusHandler(elements.compressStatus, `${file.name} is ready.`);
   updateCompressReady();
 }
 
@@ -298,8 +222,8 @@ async function compressCurrentPdf() {
   elements.compressButton.disabled = true;
   elements.compressDownload.disabled = true;
   updateCompressionEstimate();
-  setProgress(2, true);
-  setStatus(elements.compressStatus, "Loading compression engine...");
+  setProgressHandler(2, true);
+  setStatusHandler(elements.compressStatus, "Loading compression engine...");
 
   try {
     const originalBytes = await file.arrayBuffer();
@@ -319,10 +243,10 @@ async function compressCurrentPdf() {
         const msg = e.data;
         switch (msg.type) {
           case "progress":
-            setProgress(msg.percent);
+            setProgressHandler(msg.percent);
             break;
           case "status":
-            setStatus(elements.compressStatus, msg.message);
+            setStatusHandler(elements.compressStatus, msg.message);
             break;
           case "complete":
             resolve(msg.outputBytes);
@@ -361,22 +285,22 @@ async function compressCurrentPdf() {
       filename: filenameWithSuffix(file.name, "-compressed"),
     };
 
-    setProgress(100);
-    setMetrics(formatBytes(file.size), estimateCompressedSize(file, mode), formatBytes(outputBlob.size), `${savedPercent}%`);
+    setProgressHandler(100);
+    setMetricsHandler(formatBytes(file.size), estimateCompressedSize(file, mode), formatBytes(outputBlob.size), `${savedPercent}%`);
 
     if (outputBlob.size >= file.size) {
-      setStatus(
+      setStatusHandler(
         elements.compressStatus,
         `This PDF is already well-optimized — ${mode.label} compression couldn't reduce it further.`,
         "info",
       );
     } else {
-      setStatus(elements.compressStatus, `${mode.label} compression complete — ${savedPercent}% saved.`, "success");
+      setStatusHandler(elements.compressStatus, `${mode.label} compression complete — ${savedPercent}% saved.`, "success");
     }
     elements.compressDownload.disabled = false;
   } catch (error) {
-    setProgress(0);
-    setStatus(elements.compressStatus, readableError(error, "Compression failed."), "error");
+    setProgressHandler(0);
+    setStatusHandler(elements.compressStatus, readableError(error, "Compression failed."), "error");
   } finally {
     elements.compressButton.disabled = !state.compress.file;
   }
@@ -406,21 +330,21 @@ function setProtectFile(file) {
 
   if (!file) {
     elements.protectMeta.textContent = "PDF only";
-    setStatus(elements.protectStatus, "Choose a PDF and password to begin.");
+    setStatusHandler(elements.protectStatus, "Choose a PDF and password to begin.");
     updateProtectReady();
     return;
   }
 
   if (!isPdf(file)) {
     elements.protectMeta.textContent = "PDF only";
-    setStatus(elements.protectStatus, "That file is not a PDF.", "error");
+    setStatusHandler(elements.protectStatus, "That file is not a PDF.", "error");
     updateProtectReady();
     return;
   }
 
   state.protect.file = file;
   elements.protectMeta.textContent = `${file.name} · ${formatBytes(file.size)}`;
-  setStatus(elements.protectStatus, `${file.name} is ready.`);
+  setStatusHandler(elements.protectStatus, `${file.name} is ready.`);
   updateProtectReady();
 }
 
@@ -441,14 +365,14 @@ async function protectCurrentPdf() {
 
   if (!file) return;
   if (!password || password !== confirm) {
-    setStatus(elements.protectStatus, "Passwords must match.", "error");
+    setStatusHandler(elements.protectStatus, "Passwords must match.", "error");
     return;
   }
 
   elements.protectButton.disabled = true;
   elements.protectDownload.disabled = true;
   state.protect.blob = null;
-  setStatus(elements.protectStatus, "Loading encryption engine...");
+  setStatusHandler(elements.protectStatus, "Loading encryption engine...");
 
   const stamp = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const inputName = `/input-${stamp}.pdf`;
@@ -463,10 +387,10 @@ async function protectCurrentPdf() {
     const output = qpdf.FS.readFile(outputName);
 
     state.protect.blob = new Blob([output], { type: "application/pdf" });
-    setStatus(elements.protectStatus, "Password protection complete.", "success");
+    setStatusHandler(elements.protectStatus, "Password protection complete.", "success");
     elements.protectDownload.disabled = false;
   } catch (error) {
-    setStatus(elements.protectStatus, readableError(error, "Password protection failed."), "error");
+    setStatusHandler(elements.protectStatus, readableError(error, "Password protection failed."), "error");
   } finally {
     await cleanupQpdfFiles(inputName, outputName);
     updateProtectReady();
@@ -515,34 +439,34 @@ async function setOrganizeBaseFile(file) {
 
   if (!file) {
     elements.organizeMeta.textContent = "PDF only";
-    setStatus(elements.organizeStatus, "Select a PDF to show pages.");
+    setStatusHandler(elements.organizeStatus, "Select a PDF to show pages.");
     return;
   }
 
   if (!isPdf(file)) {
     elements.organizeMeta.textContent = "PDF only";
-    setStatus(elements.organizeStatus, "That file is not a PDF.", "error");
+    setStatusHandler(elements.organizeStatus, "That file is not a PDF.", "error");
     return;
   }
 
   state.organize.baseFile = file;
   elements.organizeMeta.textContent = `${file.name} · ${formatBytes(file.size)}`;
-  setStatus(elements.organizeStatus, "Rendering pages...");
+  setStatusHandler(elements.organizeStatus, "Rendering pages...");
 
   try {
     await appendPdfSource(file, true);
-    setStatus(elements.organizeStatus, `${file.name} loaded.`, "success");
+    setStatusHandler(elements.organizeStatus, `${file.name} loaded.`, "success");
   } catch (error) {
     resetOrganizer();
     elements.organizeMeta.textContent = "PDF only";
-    setStatus(elements.organizeStatus, readableError(error, "Could not read this PDF."), "error");
+    setStatusHandler(elements.organizeStatus, readableError(error, "Could not read this PDF."), "error");
   }
 }
 
 async function addOrganizeFiles(files) {
   const pdfs = files.filter(isPdf);
   if (!pdfs.length) {
-    setStatus(elements.organizeStatus, "Select PDF files to add.", "error");
+    setStatusHandler(elements.organizeStatus, "Select PDF files to add.", "error");
     return;
   }
 
@@ -552,12 +476,12 @@ async function addOrganizeFiles(files) {
 
   try {
     for (const file of pdfs) {
-      setStatus(elements.organizeStatus, `Adding pages from ${file.name}...`);
+      setStatusHandler(elements.organizeStatus, `Adding pages from ${file.name}...`);
       await appendPdfSource(file, false);
     }
-    setStatus(elements.organizeStatus, `${pdfs.length} PDF ${pdfs.length === 1 ? "was" : "were"} added.`, "success");
+    setStatusHandler(elements.organizeStatus, `${pdfs.length} PDF ${pdfs.length === 1 ? "was" : "were"} added.`, "success");
   } catch (error) {
-    setStatus(elements.organizeStatus, readableError(error, "Could not add PDF pages."), "error");
+    setStatusHandler(elements.organizeStatus, readableError(error, "Could not add PDF pages."), "error");
   } finally {
     updateOrganizerControls();
   }
@@ -717,14 +641,14 @@ function refreshPageLabels() {
 async function saveOrganizedPdf() {
   const orderedItems = Array.from(elements.pageGrid.children);
   if (!orderedItems.length) {
-    setStatus(elements.organizeStatus, "No pages are available to save.", "error");
+    setStatusHandler(elements.organizeStatus, "No pages are available to save.", "error");
     return;
   }
 
   elements.organizeButton.disabled = true;
   elements.organizeDownload.disabled = true;
   state.organize.blob = null;
-  setStatus(elements.organizeStatus, "Building organized PDF...");
+  setStatusHandler(elements.organizeStatus, "Building organized PDF...");
 
   try {
     const output = await PDFDocument.create();
@@ -750,10 +674,10 @@ async function saveOrganizedPdf() {
     });
 
     state.organize.blob = new Blob([pdfBytes], { type: "application/pdf" });
-    setStatus(elements.organizeStatus, "Organized PDF is ready.", "success");
+    setStatusHandler(elements.organizeStatus, "Organized PDF is ready.", "success");
     elements.organizeDownload.disabled = false;
   } catch (error) {
-    setStatus(elements.organizeStatus, readableError(error, "Could not build the organized PDF."), "error");
+    setStatusHandler(elements.organizeStatus, readableError(error, "Could not build the organized PDF."), "error");
   } finally {
     updateOrganizerControls();
   }
@@ -765,15 +689,11 @@ function clearOrganizer() {
   elements.organizeInput.value = "";
   elements.organizeAddInput.value = "";
   elements.organizeMeta.textContent = "PDF only";
-  setStatus(elements.organizeStatus, "Select a PDF to show pages.");
+  setStatusHandler(elements.organizeStatus, "Select a PDF to show pages.");
 }
 
-function readableError(error, fallback) {
-  const message = error?.message || String(error || "");
-  if (!message) return fallback;
-  if (message.includes("encrypted")) return `${fallback} Encrypted PDFs may need to be unlocked first.`;
-  if (message.includes("PasswordException")) return `${fallback} This PDF requires a password.`;
-  return `${fallback} ${message}`;
+function readableErrorHandler(error, fallback) {
+  return readableError(error, fallback);
 }
 
 bindDropZone(elements.compressDrop, elements.compressInput, (files) => setCompressFile(files[0]));
@@ -785,11 +705,11 @@ document.querySelectorAll('input[name="compression-level"]').forEach((input) => 
   input.addEventListener("change", () => {
     state.compress.result = null;
     elements.compressDownload.disabled = true;
-    setProgress(0);
+    setProgressHandler(0);
     updateCompressionEstimate();
     if (state.compress.file) {
       const mode = getSelectedCompressionMode();
-      setStatus(elements.compressStatus, `${mode.label} compression selected for ${state.compress.file.name}.`);
+      setStatusHandler(elements.compressStatus, `${mode.label} compression selected for ${state.compress.file.name}.`);
     }
   });
 });
@@ -834,7 +754,7 @@ elements.organizeReset.addEventListener("click", () => {
 });
 elements.organizeClear.addEventListener("click", clearOrganizer);
 
-window.addEventListener("hashchange", () => activateRoute(getRouteFromHash()));
+window.addEventListener("hashchange", () => activateRouteHandler(getRouteFromHashHandler()));
 
 elements.tabs.forEach((item) => {
   item.addEventListener("click", () => window.setTimeout(scrollToWorkspace, 0));
@@ -843,31 +763,9 @@ elements.tabs.forEach((item) => {
 if (!window.location.hash) {
   window.location.hash = "#compress";
 } else {
-  activateRoute(getRouteFromHash());
+  activateRouteHandler(getRouteFromHashHandler());
 }
 
-function initTheme() {
-  const savedTheme = localStorage.getItem("pdf-tool-theme");
-  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const initialTheme = savedTheme || (prefersDark ? "dark" : "light");
-  
-  setTheme(initialTheme);
-
-  if (elements.themeToggle) {
-    elements.themeToggle.addEventListener("click", () => {
-      const currentTheme = document.documentElement.getAttribute("data-theme") || "light";
-      setTheme(currentTheme === "light" ? "dark" : "light");
-    });
-  }
-}
-
-function setTheme(theme) {
-  document.documentElement.setAttribute("data-theme", theme);
-  localStorage.setItem("pdf-tool-theme", theme);
-  if (elements.themeIcon) {
-    elements.themeIcon.className = theme === "dark" ? "bi bi-sun-fill" : "bi bi-moon-fill";
-  }
-}
-
+// Initialize theme
 initTheme();
 

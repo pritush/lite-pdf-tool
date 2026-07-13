@@ -4,15 +4,40 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Client-side PDF tools for compression, protection, and page organization.">
-  <title>PDF Tool — Compress, Protect & Organize</title>
+  <meta name="description" content="Privacy-first, 100% client-side PDF compression, organization, and encryption. No uploads, no server processing.">
+  <meta name="keywords" content="pdf compress, pdf organize, pdf protect, pdf encryption, client-side pdf, offline pdf tool">
+  <meta name="theme-color" content="#1e3a8a">
+  <title>PDF Tool — Compress, Protect & Organize PDFs Locally</title>
+  
+  <!-- Resource Hints -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+  
+  <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+  
+  <!-- Styles -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-..." crossorigin="anonymous">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="assets/css/styles.css?v=2.0.0" rel="stylesheet">
+  
+  <!-- Icons & Manifest -->
   <link rel="icon" href="favicon.ico">
-  <link href="assets/css/styles.css?v=ui-refresh-2" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="assets/images/icon.svg">
+  <link rel="apple-touch-icon" href="assets/images/icon-180.png">
+  
+  <!-- Open Graph / Social -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="PDF Tool — Privacy-First PDF Processor">
+  <meta property="og:description" content="Compress, organize, and protect PDFs locally in your browser. 100% client-side processing.">
+  <meta property="og:url" content="https://yourdomain.com">
+  
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="PDF Tool — Privacy-First PDF Processor">
+  <meta name="twitter:description" content="Compress, organize, and protect PDFs locally in your browser.">
 </head>
 
 <body>
@@ -308,8 +333,13 @@
     </div>
   </footer>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
-  <script type="module" src="assets/js/app.js?v=6"></script>
+  <!-- Bootstrap JS (optional - only needed for tooltips/popovers) -->
+  <!-- <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" defer></script> -->
+  
+  <!-- Main Application -->
+  <script type="module" src="assets/js/app.js?v=2.0.0"></script>
+  
+  <!-- Service Worker Registration -->
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {

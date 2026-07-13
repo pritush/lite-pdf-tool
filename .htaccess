@@ -1,3 +1,14 @@
+# CRITICAL: Cross-Origin Isolation Headers
+# Required for SharedArrayBuffer (Ghostscript WASM compression)
+<IfModule mod_headers.c>
+    Header set Cross-Origin-Opener-Policy "same-origin"
+    Header set Cross-Origin-Embedder-Policy "credentialless"
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Static Content Caching
 <IfModule mod_expires.c>
     ExpiresActive On
     ExpiresDefault "access plus 1 month"
@@ -28,4 +39,9 @@
     <FilesMatch "\.(html|htm)$">
         Header set Cache-Control "max-age=3600, must-revalidate"
     </FilesMatch>
+</IfModule>
+
+# Compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json application/wasm image/svg+xml
 </IfModule>

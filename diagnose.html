@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Worker Diagnostics</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        .content {
+            padding: 30px;
+        }
+        .status-box {
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 5px solid;
+        }
+        .status-success {
+            background: #d4edda;
+            border-color: #28a745;
+            color: #155724;
+        }
+        .status-error {
+            background: #f8d7da;
+            border-color: #dc3545;
+            color: #721c24;
+        }
+        .status-warning {
+            background: #fff3cd;
+            border-color: #ffc107;
+            color: #856404;
+        }
+        .status-info {
+            background: #d1ecf1;
+            border-color: #17a2b8;
+            color: #0c5460;
+        }
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+        }
+        .detail-item:last-child {
+            border-bottom: none;
+        }
+        .detail-label {
+            font-weight: 600;
+            color: #333;
+        }
+        .detail-value {
+            font-family: 'Courier New', monospace;
+            color: #666;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        button {
+            flex: 1;
+            min-width: 200px;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        .btn-success:hover {
+            background: #218838;
+        }
+        code {
+            background: rgba(0,0,0,0.05);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        .icon {
+            font-size: 24px;
+            margin-right: 10px;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 Service Worker Diagnostics</h1>
+            <p>Complete system check for SharedArrayBuffer support</p>
+        </div>
+        
+        <div class="content">
+            <div id="loading" class="loading">
+                <div class="spinner"></div>
+                <p>Running diagnostics...</p>
+            </div>
+            
+            <div id="results" style="display:none;">
+                <div id="main-status"></div>
+                
+                <div class="status-box status-info">
+                    <strong>📊 System Details</strong>
+                    <div id="details" style="margin-top: 15px;"></div>
+                </div>
+                
+                <div class="button-group">
+                    <button class="btn-primary" onclick="location.reload(true)">
+                        🔄 Hard Reload
+                    </button>
+                    <button class="btn-danger" onclick="unregisterAndReload()">
+                        🗑️ Reset Service Worker
+                    </button>
+                    <button class="btn-success" onclick="testCompression()">
+                        🧪 Test Compression
+                    </button>
+                </div>
+                
+                <div id="recommendations"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function runDiagnostics() {
+            const results = {
+                crossOriginIsolated: window.crossOriginIsolated,
+                sharedArrayBuffer: typeof SharedArrayBuffer !== 'undefined',
+                serviceWorkerSupported: 'serviceWorker' in navigator,
+                serviceWorkerRegistered: false,
+                serviceWorkerActive: false,
+                serviceWorkerControlling: false,
+                browserInfo: navigator.userAgent,
+                isLocalhost: location.hostname === 'localhost' || location.hostname === '127.0.0.1',
+                protocol: location.protocol
+            };
+
+            if (results.serviceWorkerSupported) {
+                try {
+                    const reg = await navigator.serviceWorker.getRegistration();
+                    results.serviceWorkerRegistered = !!reg;
+                    results.serviceWorkerActive = !!(reg && reg.active);
+                    results.serviceWorkerControlling = !!navigator.serviceWorker.controller;
+                    if (reg) {
+                        results.swScriptURL = reg.active?.scriptURL || 'unknown';
+                        results.swState = reg.active?.state || 'unknown';
+                    }
+                } catch (e) {
+                    results.swError = e.message;
+                }
+            }
+
+            return results;
+        }
+
+        function displayResults(results) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('results').style.display = 'block';
+
+            // Main status
+            const mainStatus = document.getElementById('main-status');
+            const isWorking = results.crossOriginIsolated && results.sharedArrayBuffer;
+            
+            if (isWorking) {
+                mainStatus.className = 'status-box status-success';
+                mainStatus.innerHTML = `
+                    <h2><span class="icon">✅</span>All Systems Operational</h2>
+                    <p>SharedArrayBuffer is available and compression will work!</p>
+                `;
+            } else if (!results.serviceWorkerSupported) {
+                mainStatus.className = 'status-box status-error';
+                mainStatus.innerHTML = `
+                    <h2><span class="icon">❌</span>Service Worker Not Supported</h2>
+                    <p>Your browser doesn't support Service Workers. Please update your browser.</p>
+                `;
+            } else if (!results.serviceWorkerRegistered) {
+                mainStatus.className = 'status-box status-warning';
+                mainStatus.innerHTML = `
+                    <h2><span class="icon">⚠️</span>Service Worker Not Registered</h2>
+                    <p>The service worker needs to be registered. Go to the main page to register it.</p>
+                `;
+            } else if (!results.serviceWorkerControlling) {
+                mainStatus.className = 'status-box status-warning';
+                mainStatus.innerHTML = `
+                    <h2><span class="icon">⏳</span>Service Worker Not Controlling</h2>
+                    <p>Service worker is registered but not active yet. The page will reload automatically.</p>
+                `;
+            } else {
+                mainStatus.className = 'status-box status-error';
+                mainStatus.innerHTML = `
+                    <h2><span class="icon">❌</span>SharedArrayBuffer Not Available</h2>
+                    <p>Service worker is active but SharedArrayBuffer is still unavailable. Try resetting.</p>
+                `;
+            }
+
+            // Details
+            const details = document.getElementById('details');
+            details.innerHTML = `
+                <div class="detail-item">
+                    <span class="detail-label">Cross-Origin Isolated:</span>
+                    <span class="detail-value">${results.crossOriginIsolated ? '✅ Yes' : '❌ No'}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">SharedArrayBuffer:</span>
+                    <span class="detail-value">${results.sharedArrayBuffer ? '✅ Available' : '❌ Unavailable'}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Service Worker Support:</span>
+                    <span class="detail-value">${results.serviceWorkerSupported ? '✅ Yes' : '❌ No'}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Service Worker Registered:</span>
+                    <span class="detail-value">${results.serviceWorkerRegistered ? '✅ Yes' : '❌ No'}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Service Worker Active:</span>
+                    <span class="detail-value">${results.serviceWorkerActive ? '✅ Yes' : '❌ No'}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Service Worker Controlling:</span>
+                    <span class="detail-value">${results.serviceWorkerControlling ? '✅ Yes' : '❌ No'}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Protocol:</span>
+                    <span class="detail-value">${results.protocol}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Is Localhost:</span>
+                    <span class="detail-value">${results.isLocalhost ? '✅ Yes' : '❌ No'}</span>
+                </div>
+            `;
+
+            // Recommendations
+            const recommendations = document.getElementById('recommendations');
+            const tips = [];
+
+            if (!isWorking && results.serviceWorkerSupported) {
+                if (!results.serviceWorkerRegistered) {
+                    tips.push({
+                        title: '1. Register Service Worker',
+                        content: 'Visit the <a href="index.html">main page (index.html)</a> first to register the service worker.'
+                    });
+                } else if (!results.serviceWorkerControlling) {
+                    tips.push({
+                        title: '2. Wait for Reload',
+                        content: 'The service worker is registered but not controlling yet. The page should reload automatically. If not, try clicking "Hard Reload".'
+                    });
+                } else {
+                    tips.push({
+                        title: '3. Reset Service Worker',
+                        content: 'Click "Reset Service Worker" to unregister and start fresh. This often fixes stubborn issues.'
+                    });
+                    tips.push({
+                        title: '4. Clear Browser Cache',
+                        content: 'Press Ctrl+Shift+Delete and clear cached files, then reload.'
+                    });
+                }
+            }
+
+            if (tips.length > 0) {
+                recommendations.innerHTML = `
+                    <div class="status-box status-info">
+                        <strong>💡 Recommended Actions</strong>
+                        ${tips.map(tip => `
+                            <div style="margin-top: 15px;">
+                                <strong>${tip.title}</strong>
+                                <p style="margin-top: 5px;">${tip.content}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+        }
+
+        async function unregisterAndReload() {
+            if ('serviceWorker' in navigator) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                for (let registration of registrations) {
+                    await registration.unregister();
+                }
+            }
+            alert('Service worker unregistered. Page will reload...');
+            window.location.reload(true);
+        }
+
+        function testCompression() {
+            if (typeof SharedArrayBuffer === 'undefined') {
+                alert('❌ Cannot test: SharedArrayBuffer is not available');
+                return;
+            }
+            alert('✅ SharedArrayBuffer is available! Redirecting to main app...');
+            window.location.href = 'index.html';
+        }
+
+        // Run diagnostics on load
+        window.addEventListener('load', async () => {
+            const results = await runDiagnostics();
+            displayResults(results);
+        });
+    </script>
+</body>
+</html>
